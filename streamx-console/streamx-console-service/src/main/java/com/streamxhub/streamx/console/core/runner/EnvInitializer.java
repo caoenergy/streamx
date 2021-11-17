@@ -27,7 +27,7 @@ import com.streamxhub.streamx.common.enums.StorageType;
 import com.streamxhub.streamx.common.fs.FsOperator;
 import com.streamxhub.streamx.common.util.SystemPropertyUtils;
 import com.streamxhub.streamx.console.base.util.WebUtils;
-import com.streamxhub.streamx.console.core.entity.FlinkVersion;
+import com.streamxhub.streamx.console.core.entity.FlinkEnv;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.ApplicationArguments;
@@ -66,6 +66,7 @@ public class EnvInitializer implements ApplicationRunner {
         overrideSystemProp(ConfigConst.KEY_STREAMX_WORKSPACE_LOCAL(), ConfigConst.STREAMX_WORKSPACE_DEFAULT());
         overrideSystemProp(ConfigConst.KEY_STREAMX_WORKSPACE_REMOTE(), ConfigConst.STREAMX_WORKSPACE_DEFAULT());
         overrideSystemProp(ConfigConst.KEY_DOCKER_IMAGE_NAMESPACE(), ConfigConst.DOCKER_IMAGE_NAMESPACE_DEFAULT());
+        overrideSystemProp(ConfigConst.KEY_HADOOP_USER_NAME(), ConfigConst.DEFAULT_HADOOP_USER_NAME());
         //automatic in local
         storageInitialize(LFS);
     }
@@ -167,8 +168,8 @@ public class EnvInitializer implements ApplicationRunner {
         }
     }
 
-    public void checkFlinkEnv(StorageType storageType, FlinkVersion flinkVersion) {
-        String flinkLocalHome = flinkVersion.getFlinkHome();
+    public void checkFlinkEnv(StorageType storageType, FlinkEnv flinkEnv) {
+        String flinkLocalHome = flinkEnv.getFlinkHome();
         if (flinkLocalHome == null) {
             throw new ExceptionInInitializerError("[StreamX] FLINK_HOME is undefined,Make sure that Flink is installed.");
         }
@@ -183,7 +184,7 @@ public class EnvInitializer implements ApplicationRunner {
         String flinkHome = appFlink.concat("/").concat(flinkName);
         if (!fsOperator.exists(flinkHome)) {
             log.info("{} is not exists,upload beginning....", flinkHome);
-            fsOperator.upload(flinkLocalHome, flinkHome, false, false);
+            fsOperator.upload(flinkLocalHome, flinkHome, false, true);
         }
     }
 

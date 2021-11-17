@@ -21,6 +21,7 @@
 package com.streamxhub.streamx.common.conf
 
 import com.streamxhub.streamx.common.util.SystemPropertyUtils
+
 import java.time.LocalDateTime
 
 object ConfigConst {
@@ -309,6 +310,7 @@ object ConfigConst {
   val DOCKER_IMAGE_NAMESPACE_DEFAULT = "streamx"
 
   lazy val DOCKER_IMAGE_NAMESPACE: String = SystemPropertyUtils.get(KEY_DOCKER_IMAGE_NAMESPACE, DOCKER_IMAGE_NAMESPACE_DEFAULT)
+
 
   def printLogo(info: String): Unit = {
     println("\n\n                 .+.                                ")

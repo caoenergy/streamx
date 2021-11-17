@@ -59,7 +59,7 @@ import java.io.Serializable;
 import java.util.*;
 import java.util.stream.Collectors;
 
-import static com.streamxhub.streamx.common.conf.ConfigurationOptions.OPTION_DEFAULT_VALUE;
+import static com.streamxhub.streamx.common.conf.ConfigurationOptions.KUBERNETES_NAMESPACE_DEFAULT_VALUE;
 import static com.streamxhub.streamx.console.core.enums.FlinkAppState.of;
 
 /**
@@ -113,7 +113,7 @@ public class Application implements Serializable {
     /**
      * k8s部署下的namespace
      */
-    private String k8sNamespace = "default";
+    private String k8sNamespace = KUBERNETES_NAMESPACE_DEFAULT_VALUE;
 
 
     private Integer state;
@@ -249,7 +249,7 @@ public class Application implements Serializable {
     private transient String flinkRestUrl;
 
     public void setK8sNamespace(String k8sNamespace) {
-        this.k8sNamespace = StringUtils.isBlank(k8sNamespace) ? OPTION_DEFAULT_VALUE : k8sNamespace;
+        this.k8sNamespace = StringUtils.isBlank(k8sNamespace) ? KUBERNETES_NAMESPACE_DEFAULT_VALUE : k8sNamespace;
     }
 
     public K8sPodTemplates getK8sPodTemplates() {
@@ -390,9 +390,12 @@ public class Application implements Serializable {
                 String url = String.format(format, HadoopUtils.getRMWebAppURL(false), appId);
                 return httpGetDoResult(url, AppInfo.class);
             } catch (IOException e) {
-                log.warn(e.getMessage());
-                String url = String.format(format, HadoopUtils.getRMWebAppURL(true), appId);
-                return httpGetDoResult(url, AppInfo.class);
+                try {
+                    String url = String.format(format, HadoopUtils.getRMWebAppURL(true), appId);
+                    return httpGetDoResult(url, AppInfo.class);
+                } catch (IOException e1) {
+                    throw e1;
+                }
             }
         }
         return null;
@@ -406,9 +409,12 @@ public class Application implements Serializable {
                 String url = String.format(format, HadoopUtils.getRMWebAppURL(false), appId);
                 return httpGetDoResult(url, JobsOverview.class);
             } catch (IOException e) {
-                log.warn(e.getMessage());
-                String url = String.format(format, HadoopUtils.getRMWebAppURL(true), appId);
-                return httpGetDoResult(url, JobsOverview.class);
+                try {
+                    String url = String.format(format, HadoopUtils.getRMWebAppURL(true), appId);
+                    return httpGetDoResult(url, JobsOverview.class);
+                } catch (Exception e1) {
+                    throw e1;
+                }
             }
         }
         return null;
@@ -421,9 +427,12 @@ public class Application implements Serializable {
             String url = String.format(format, HadoopUtils.getRMWebAppURL(false), appId);
             return httpGetDoResult(url, Overview.class);
         } catch (IOException e) {
-            log.warn(e.getMessage());
-            String url = String.format(format, HadoopUtils.getRMWebAppURL(true), appId);
-            return httpGetDoResult(url, Overview.class);
+            try {
+                String url = String.format(format, HadoopUtils.getRMWebAppURL(true), appId);
+                return httpGetDoResult(url, Overview.class);
+            } catch (Exception e1) {
+                throw e1;
+            }
         }
     }
 
@@ -434,9 +443,12 @@ public class Application implements Serializable {
             String url = String.format(format, HadoopUtils.getRMWebAppURL(false), appId, jobId);
             return httpGetDoResult(url, CheckPoints.class);
         } catch (IOException e) {
-            log.warn(e.getMessage());
-            String url = String.format(format, HadoopUtils.getRMWebAppURL(true), appId, jobId);
-            return httpGetDoResult(url, CheckPoints.class);
+            try {
+                String url = String.format(format, HadoopUtils.getRMWebAppURL(true), appId, jobId);
+                return httpGetDoResult(url, CheckPoints.class);
+            } catch (Exception e1) {
+                throw e1;
+            }
         }
     }
 
@@ -494,7 +506,10 @@ public class Application implements Serializable {
 
     @JsonIgnore
     public boolean isNeedRestartOnFailed() {
-        return this.restartSize != null && this.restartSize > 0 && this.restartCount <= this.restartSize;
+        if (this.restartSize != null && this.restartCount != null) {
+            return this.restartSize > 0 && this.restartCount <= this.restartSize;
+        }
+        return false;
     }
 
     /**
