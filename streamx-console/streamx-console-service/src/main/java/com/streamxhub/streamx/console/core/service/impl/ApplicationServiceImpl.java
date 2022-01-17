@@ -1,74 +1,103 @@
 /*
  * Copyright (c) 2019 The StreamX Project
- * <p>
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements. See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership. The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License. You may obtain a copy of the License at
- * <p>
- * http://www.apache.org/licenses/LICENSE-2.0
- * <p>
- * Unless required by applicable law or agreed to in writing,
- * software distributed under the License is distributed on an
- * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
- * KIND, either express or implied. See the License for the
- * specific language governing permissions and limitations
- * under the License.
+ *
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
 
 package com.streamxhub.streamx.console.core.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
-import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.streamxhub.streamx.common.conf.ConfigConst;
-import com.streamxhub.streamx.common.conf.ConfigurationOptions;
 import com.streamxhub.streamx.common.conf.Workspace;
 import com.streamxhub.streamx.common.domain.FlinkMemorySize;
 import com.streamxhub.streamx.common.enums.DevelopmentMode;
 import com.streamxhub.streamx.common.enums.ExecutionMode;
 import com.streamxhub.streamx.common.enums.ResolveOrder;
-import com.streamxhub.streamx.common.enums.StorageType;
 import com.streamxhub.streamx.common.fs.FsOperator;
-import com.streamxhub.streamx.common.util.*;
+import com.streamxhub.streamx.common.util.DeflaterUtils;
+import com.streamxhub.streamx.common.util.DependencyUtils;
+import com.streamxhub.streamx.common.util.ExceptionUtils;
+import com.streamxhub.streamx.common.util.ThreadUtils;
+import com.streamxhub.streamx.common.util.Utils;
+import com.streamxhub.streamx.common.util.YarnUtils;
 import com.streamxhub.streamx.console.base.domain.Constant;
 import com.streamxhub.streamx.console.base.domain.RestRequest;
 import com.streamxhub.streamx.console.base.exception.ServiceException;
 import com.streamxhub.streamx.console.base.util.CommonUtils;
+import com.streamxhub.streamx.console.base.util.ObjectUtils;
 import com.streamxhub.streamx.console.base.util.SortUtils;
 import com.streamxhub.streamx.console.base.util.WebUtils;
 import com.streamxhub.streamx.console.core.annotation.RefreshCache;
 import com.streamxhub.streamx.console.core.dao.ApplicationMapper;
-import com.streamxhub.streamx.console.core.entity.*;
-import com.streamxhub.streamx.console.core.enums.*;
+import com.streamxhub.streamx.console.core.entity.AppBuildPipeline;
+import com.streamxhub.streamx.console.core.entity.Application;
+import com.streamxhub.streamx.console.core.entity.ApplicationConfig;
+import com.streamxhub.streamx.console.core.entity.ApplicationLog;
+import com.streamxhub.streamx.console.core.entity.FlinkEnv;
+import com.streamxhub.streamx.console.core.entity.FlinkSql;
+import com.streamxhub.streamx.console.core.entity.Message;
+import com.streamxhub.streamx.console.core.entity.Project;
+import com.streamxhub.streamx.console.core.entity.SavePoint;
+import com.streamxhub.streamx.console.core.enums.AppExistsState;
+import com.streamxhub.streamx.console.core.enums.ApplicationType;
+import com.streamxhub.streamx.console.core.enums.CandidateType;
+import com.streamxhub.streamx.console.core.enums.ChangedType;
+import com.streamxhub.streamx.console.core.enums.CheckPointType;
+import com.streamxhub.streamx.console.core.enums.DeployState;
+import com.streamxhub.streamx.console.core.enums.FlinkAppState;
+import com.streamxhub.streamx.console.core.enums.NoticeType;
+import com.streamxhub.streamx.console.core.enums.OptionState;
 import com.streamxhub.streamx.console.core.metrics.flink.JobsOverview;
 import com.streamxhub.streamx.console.core.runner.EnvInitializer;
-import com.streamxhub.streamx.console.core.service.*;
+import com.streamxhub.streamx.console.core.service.AppBuildPipeService;
+import com.streamxhub.streamx.console.core.service.ApplicationBackUpService;
+import com.streamxhub.streamx.console.core.service.ApplicationConfigService;
+import com.streamxhub.streamx.console.core.service.ApplicationLogService;
+import com.streamxhub.streamx.console.core.service.ApplicationService;
+import com.streamxhub.streamx.console.core.service.EffectiveService;
+import com.streamxhub.streamx.console.core.service.FlinkEnvService;
+import com.streamxhub.streamx.console.core.service.FlinkSqlService;
+import com.streamxhub.streamx.console.core.service.MessageService;
+import com.streamxhub.streamx.console.core.service.ProjectService;
+import com.streamxhub.streamx.console.core.service.SavePointService;
+import com.streamxhub.streamx.console.core.service.SettingService;
 import com.streamxhub.streamx.console.core.task.FlinkTrackingTask;
+import com.streamxhub.streamx.console.core.websocket.WebSocketEndpoint;
 import com.streamxhub.streamx.console.system.authentication.ServerComponent;
 import com.streamxhub.streamx.flink.core.conf.ParameterCli;
 import com.streamxhub.streamx.flink.kubernetes.K8sFlinkTrkMonitor;
 import com.streamxhub.streamx.flink.kubernetes.model.FlinkMetricCV;
 import com.streamxhub.streamx.flink.kubernetes.model.TrkId;
-import com.streamxhub.streamx.flink.packer.docker.DockerAuthConf;
-import com.streamxhub.streamx.flink.packer.maven.JarPackDeps;
 import com.streamxhub.streamx.flink.submit.FlinkSubmitHelper;
-import com.streamxhub.streamx.flink.submit.domain.*;
+import com.streamxhub.streamx.flink.submit.domain.KubernetesSubmitParam;
+import com.streamxhub.streamx.flink.submit.domain.StopRequest;
+import com.streamxhub.streamx.flink.submit.domain.StopResponse;
+import com.streamxhub.streamx.flink.submit.domain.SubmitRequest;
+import com.streamxhub.streamx.flink.submit.domain.SubmitResponse;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.annotation.DependsOn;
-import org.springframework.messaging.simp.SimpMessageSendingOperations;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
@@ -77,10 +106,24 @@ import scala.collection.JavaConversions;
 
 import javax.annotation.PostConstruct;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.Serializable;
-import java.util.*;
-import java.util.concurrent.*;
+import java.util.Arrays;
+import java.util.Base64;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Date;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.jar.Manifest;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -94,7 +137,6 @@ import static com.streamxhub.streamx.console.core.task.K8sFlinkTrkMonitorWrapper
 @Slf4j
 @Service
 @Transactional(propagation = Propagation.SUPPORTS, readOnly = true, rollbackFor = Exception.class)
-@DependsOn({"flyway", "flywayInitializer"})
 public class ApplicationServiceImpl extends ServiceImpl<ApplicationMapper, Application>
         implements ApplicationService {
 
@@ -114,8 +156,9 @@ public class ApplicationServiceImpl extends ServiceImpl<ApplicationMapper, Appli
             new ThreadPoolExecutor.AbortPolicy()
     );
 
-    private final Pattern JOBNAME_PATTERN = Pattern.compile("^[.\\x{4e00}-\\x{9fa5}A-Za-z0-9_—-]+$");
+    private static final Pattern JOB_NAME_PATTERN = Pattern.compile("^[.\\x{4e00}-\\x{9fa5}A-Za-z0-9_\\-\\s]+$");
 
+    private static final Pattern SINGLE_SPACE_PATTERN = Pattern.compile("^[^\\s]+(\\s[^\\s]+)*$");
 
     @Autowired
     private ProjectService projectService;
@@ -154,10 +197,10 @@ public class ApplicationServiceImpl extends ServiceImpl<ApplicationMapper, Appli
     private EnvInitializer envInitializer;
 
     @Autowired
-    private SimpMessageSendingOperations simpMessageSendingOperations;
+    private K8sFlinkTrkMonitor k8sFlinkTrkMonitor;
 
     @Autowired
-    private K8sFlinkTrkMonitor k8sFlinkTrkMonitor;
+    private AppBuildPipeService appBuildPipeService;
 
     @PostConstruct
     public void resetOptionState() {
@@ -243,35 +286,16 @@ public class ApplicationServiceImpl extends ServiceImpl<ApplicationMapper, Appli
     }
 
     @Override
-    public boolean upload(MultipartFile file, StorageType storageType) throws Exception {
-        envInitializer.storageInitialize(storageType);
-        String APP_UPLOADS = Workspace.of(storageType).APP_UPLOADS();
-        String uploadFile = APP_UPLOADS.concat("/").concat(Objects.requireNonNull(file.getOriginalFilename()));
-        FsOperator fsOperator = FsOperator.of(storageType);
-        //1)检查文件是否存在,md5是否一致.
-        if (fsOperator.exists(uploadFile)) {
-            String md5 = DigestUtils.md5Hex(file.getInputStream());
-            //md5一致,则无需在上传.
-            if (md5.equals(fsOperator.fileMd5(uploadFile))) {
-                return true;
-            } else {
-                //md5不一致,删除
-                fsOperator.delete(uploadFile);
-            }
-        }
-
-        //2) 确定需要上传,先上传到本地零时目录
+    public String upload(MultipartFile file) throws Exception {
         String temp = WebUtils.getAppDir("temp");
         File saveFile = new File(temp, file.getOriginalFilename());
-        // delete when exsit
+        // delete when exists
         if (saveFile.exists()) {
             saveFile.delete();
         }
         // save file to temp dir
         FileUtils.writeByteArrayToFile(saveFile, file.getBytes());
-        //3) 从本地temp目录上传到hdfs
-        fsOperator.upload(saveFile.getAbsolutePath(), APP_UPLOADS, true, true);
-        return true;
+        return saveFile.getAbsolutePath();
     }
 
     @Override
@@ -522,6 +546,10 @@ public class ApplicationServiceImpl extends ServiceImpl<ApplicationMapper, Appli
         appParam.setState(FlinkAppState.CREATED.getValue());
         appParam.setOptionState(OptionState.NONE.getValue());
         appParam.setCreateTime(new Date());
+        if (appParam.isUploadJob()) {
+            String jarPath = WebUtils.getAppDir("temp").concat("/").concat(appParam.getJar());
+            appParam.setJarCheckSum(FileUtils.checksumCRC32(new File(jarPath)));
+        }
         boolean saved = save(appParam);
         if (saved) {
             if (appParam.isFlinkSqlJob()) {
@@ -532,7 +560,7 @@ public class ApplicationServiceImpl extends ServiceImpl<ApplicationMapper, Appli
                 configService.create(appParam, true);
             }
             assert appParam.getId() != null;
-            deploy(appParam);
+            deploy(appParam, appParam.getSocketId());
             return true;
         }
         return false;
@@ -544,23 +572,45 @@ public class ApplicationServiceImpl extends ServiceImpl<ApplicationMapper, Appli
     public boolean update(Application appParam) {
         try {
             Application application = getById(appParam.getId());
-            //检查任务相关的参数是否发生变化,发生变化则设置需要重启的状态
-            if (!appParam.eqJobParam(application)) {
-                application.setDeploy(DeployState.NEED_RESTART_AFTER_CONF_UPDATE.get());
-            } else if (application.isStreamXJob()) {
-                ApplicationConfig config = configService.getEffective(application.getId());
-                if (config != null) {
-                    if (appParam.getConfigId() == null || !appParam.getConfigId().equals(config.getId())) {
-                        application.setDeploy(DeployState.NEED_RESTART_AFTER_CONF_UPDATE.get());
-                    } else {
-                        String decode = new String(Base64.getDecoder().decode(appParam.getConfig()));
-                        String encode = DeflaterUtils.zipString(decode.trim());
-                        if (!config.getContent().equals(encode)) {
+
+            boolean localJarChanged = false;
+
+            if (application.isUploadJob()) {
+                if (!ObjectUtils.safeEquals(application.getJar(), application.getJar())) {
+                    application.setDeploy(DeployState.NEED_DEPLOY_AFTER_BUILD.get());
+                    localJarChanged = true;
+                }
+                String jarPath = WebUtils.getAppDir("temp").concat("/").concat(appParam.getJar());
+                File jarFile = new File(jarPath);
+                if (jarFile.exists()) {
+                    long checkSum = FileUtils.checksumCRC32(jarFile);
+                    if (!ObjectUtils.safeEquals(checkSum, application.getJarCheckSum())) {
+                        application.setDeploy(DeployState.NEED_DEPLOY_AFTER_BUILD.get());
+                        localJarChanged = true;
+                    }
+                }
+            }
+
+            if (!localJarChanged) {
+                //检查任务相关的参数是否发生变化,发生变化则设置需要重启的状态
+                if (!appParam.eqJobParam(application)) {
+                    application.setDeploy(DeployState.NEED_RESTART_AFTER_CONF_UPDATE.get());
+                } else if (application.isStreamXJob()) {
+                    ApplicationConfig config = configService.getEffective(application.getId());
+                    if (config != null) {
+                        if (appParam.getConfigId() == null || !appParam.getConfigId().equals(config.getId())) {
                             application.setDeploy(DeployState.NEED_RESTART_AFTER_CONF_UPDATE.get());
+                        } else {
+                            String decode = new String(Base64.getDecoder().decode(appParam.getConfig()));
+                            String encode = DeflaterUtils.zipString(decode.trim());
+                            if (!config.getContent().equals(encode)) {
+                                application.setDeploy(DeployState.NEED_RESTART_AFTER_CONF_UPDATE.get());
+                            }
                         }
                     }
                 }
             }
+
             //从db中补全jobType到appParam
             appParam.setJobType(application.getJobType());
             //以下参数发生变化,需要重新任务才能生效
@@ -578,6 +628,7 @@ public class ApplicationServiceImpl extends ServiceImpl<ApplicationMapper, Appli
             application.setK8sPodTemplate(appParam.getK8sPodTemplate());
             application.setK8sJmPodTemplate(appParam.getK8sJmPodTemplate());
             application.setK8sTmPodTemplate(appParam.getK8sTmPodTemplate());
+            application.setK8sHadoopIntegration(appParam.getK8sHadoopIntegration());
 
             //以下参数发生改变不影响正在运行的任务
             application.setDescription(appParam.getDescription());
@@ -670,7 +721,7 @@ public class ApplicationServiceImpl extends ServiceImpl<ApplicationMapper, Appli
     }
 
     @Override
-    public void deploy(Application application) {
+    public void deploy(Application application, String socketId) {
         executorService.submit(() -> {
             try {
                 FlinkTrackingTask.refreshTracking(application.getId(), () -> {
@@ -678,42 +729,51 @@ public class ApplicationServiceImpl extends ServiceImpl<ApplicationMapper, Appli
                     if (application.getRestart()) {
                         this.cancel(application);
                     }
-                    FlinkTrackingTask.refreshTracking(application.getId(), () -> {
-                        baseMapper.update(
-                                application,
-                                new UpdateWrapper<Application>()
-                                        .lambda()
-                                        .eq(Application::getId, application.getId())
-                                        .set(Application::getDeploy, DeployState.DEPLOYING.get())
 
-                        );
+                    //2) update deployState
+                    FlinkTrackingTask.refreshTracking(application.getId(), () -> {
+                        application.setDeploy(DeployState.DEPLOYING.get());
+                        this.updateDeploy(application);
                         return null;
                     });
 
+                    // 3) backup
+                    if (application.getBackUp()) {
+                        this.backUpService.backup(application);
+                    }
+
+                    //4) deploy action
                     LambdaUpdateWrapper<Application> updateWrapper = Wrappers.lambdaUpdate();
                     updateWrapper.eq(Application::getId, application.getId());
                     try {
                         if (application.isCustomCodeJob()) {
                             log.info("CustomCodeJob deploying...");
-                            // 2) backup
-                            if (application.getBackUp()) {
-                                this.backUpService.backup(application);
-                            }
-                            // 3) deploying...
+                            // 4.1) deploying...
                             String appHome = application.getAppHome();
                             FsOperator fsOperator = application.getFsOperator();
                             fsOperator.delete(appHome);
-                            //本地编译路径
-                            String distHome = application.getDistHome();
-                            fsOperator.upload(distHome, appHome);
+                            if (application.isUploadJob()) {
+                                String appUploads = application.getWorkspace().APP_UPLOADS();
+                                String temp = WebUtils.getAppDir("temp");
+                                File localJar = new File(temp, application.getJar());
+                                String targetJar = appUploads.concat("/").concat(application.getJar());
+                                checkOrElseUploadJar(application, localJar, targetJar);
+                                //4.2 ) 将upload jar 上传到appHome下.
+                                fsOperator.mkdirs(appHome);
+                                fsOperator.copy(targetJar, appHome, false, true);
+                            } else {
+                                fsOperator.upload(application.getDistHome(), appHome);
+                            }
                         } else {
                             log.info("FlinkSqlJob deploying...");
                             FlinkSql flinkSql = flinkSqlService.getCandidate(application.getId(), CandidateType.NEW);
                             assert flinkSql != null;
                             application.setDependency(flinkSql.getDependency());
-                            downloadDependency(application);
+                            Collection<String> dependencyJars = downloadDependency(application, socketId);
+                            uploadDependency(application, dependencyJars);
                         }
-                        // 4) 更新发布状态,需要重启的应用则重新启动...
+
+                        // 4.3) 更新发布状态,需要重启的应用则重新启动...
                         if (application.getRestart()) {
                             application.setSavePointed(true);
                             // 重新启动.
@@ -761,7 +821,12 @@ public class ApplicationServiceImpl extends ServiceImpl<ApplicationMapper, Appli
         });
     }
 
-    private void downloadDependency(Application application) throws Exception {
+    @Override
+    public void updateDeploy(Application application) {
+        baseMapper.updateDeploy(application);
+    }
+
+    private Collection<String> downloadDependency(Application application, String socketId) throws Exception {
         //1) init.
         File jobLocalHome = application.getLocalFlinkSqlHome();
         if (jobLocalHome.exists()) {
@@ -777,6 +842,9 @@ public class ApplicationServiceImpl extends ServiceImpl<ApplicationMapper, Appli
 
         //2) maven pom...
         List<Application.Pom> pom = application.getDependencyObject().getPom();
+
+        Collection<String> dependencyJars = Collections.EMPTY_LIST;
+
         if (Utils.notEmpty(pom)) {
             log.info("downloadDependency..{}", pom.toString());
             StringBuilder builder = new StringBuilder();
@@ -802,11 +870,8 @@ public class ApplicationServiceImpl extends ServiceImpl<ApplicationMapper, Appli
             }));
 
             String exclusions = builder.deleteCharAt(builder.length() - 1).toString();
-
             Long id = application.getId();
             StringBuilder logBuilder = this.tailBuffer.getOrDefault(id, new StringBuilder());
-
-            Collection<String> dependencyJars;
             try {
                 dependencyJars = JavaConversions.asJavaCollection(DependencyUtils.resolveMavenDependencies(
                         exclusions,
@@ -819,52 +884,75 @@ public class ApplicationServiceImpl extends ServiceImpl<ApplicationMapper, Appli
                                 if (tailBeginning.containsKey(id)) {
                                     tailBeginning.remove(id);
                                     Arrays.stream(logBuilder.toString().split("\n"))
-                                            .forEach(x -> simpMessageSendingOperations.convertAndSend("/resp/mvn", x));
+                                            .forEach(x -> WebSocketEndpoint.writeMessage(socketId, x));
                                 } else {
-                                    simpMessageSendingOperations.convertAndSend("/resp/mvn", out);
+                                    WebSocketEndpoint.writeMessage(socketId, out);
                                 }
                             }
                             logBuilder.append(out).append("\n");
                         }
                 ));
             } catch (Exception e) {
-                simpMessageSendingOperations.convertAndSend("/resp/mvn", "[Exception] ".concat(e.getMessage()));
+                WebSocketEndpoint.writeMessage(socketId, "[Exception] ".concat(e.getMessage()));
                 throw new ServiceException("downloadDependency error: " + e.getMessage());
             } finally {
                 tailOutMap.remove(id);
                 tailBeginning.remove(id);
                 tailBuffer.remove(id);
             }
+        }
+        return dependencyJars;
+    }
 
-            // 2) backup
-            if (application.getBackUp()) {
-                this.backUpService.backup(application);
-            }
+    private void uploadDependency(Application application, Collection<String> dependencyJars) throws IOException {
+        FsOperator fsOperator = application.getFsOperator();
 
-            for (String x : dependencyJars) {
-                File jar = new File(x);
+        //1 ) upload pom dependency
+        if (!dependencyJars.isEmpty()) {
+            File lib = new File(application.getLocalFlinkSqlHome(), "lib");
+            // 1.1 ) copy dependencyJar to jobLocalHome
+            for (String depJar : dependencyJars) {
+                File jar = new File(depJar);
                 FileUtils.copyFileToDirectory(jar, lib);
             }
 
-            // 3) deploying...
-            FsOperator fsOperator = application.getFsOperator();
+            // 1.2 ) upload jar by pomJar
             fsOperator.delete(application.getAppHome());
+            fsOperator.upload(application.getLocalFlinkSqlHome().getAbsolutePath(), application.getWorkspace().APP_WORKSPACE());
+        }
 
-            //3) upload jar by pomJar
-            fsOperator.delete(application.getAppHome());
-
-            fsOperator.upload(jobLocalHome.getAbsolutePath(), application.getWorkspace().APP_WORKSPACE());
-
-            //4) upload jar by uploadJar
-            List<String> jars = application.getDependencyObject().getJar();
-            String APP_UPLOADS = application.getWorkspace().APP_UPLOADS();
-            if (Utils.notEmpty(jars)) {
-                jars.forEach(jar -> {
-                    String src = APP_UPLOADS.concat("/").concat(jar);
-                    fsOperator.copy(src, application.getAppHome().concat("/lib"), false, true);
-                });
+        //2 ) upload local jar
+        List<String> jars = application.getDependencyObject().getJar();
+        String appUploads = application.getWorkspace().APP_UPLOADS();
+        String temp = WebUtils.getAppDir("temp");
+        if (Utils.notEmpty(jars)) {
+            for (String jar : jars) {
+                File localJar = new File(temp, jar);
+                String targetJar = appUploads.concat("/").concat(jar);
+                checkOrElseUploadJar(application, localJar, targetJar);
+                //3) 将upload目录下的文件上传到app/lib下.
+                fsOperator.copy(targetJar, application.getAppLib(), false, true);
             }
+        }
+    }
 
+    private void checkOrElseUploadJar(Application application, File localJar, String targetJar) throws IOException {
+        FsOperator fsOperator = application.getFsOperator();
+        String appUploads = application.getWorkspace().APP_UPLOADS();
+        //1)文件不存直接上传
+        if (!fsOperator.exists(targetJar)) {
+            fsOperator.upload(localJar.getAbsolutePath(), appUploads, false, true);
+        } else {
+            //2) 文件已经存在则检查md5是否一致.不一致则重新上传
+            try (InputStream inputStream = new FileInputStream(localJar)) {
+                String md5 = DigestUtils.md5Hex(inputStream);
+                //2) md5不一致,则需重新上传.将本地temp/下的文件上传到upload目录下
+                if (!md5.equals(fsOperator.fileMd5(targetJar))) {
+                    fsOperator.upload(localJar.getAbsolutePath(), appUploads, false, true);
+                }
+            } catch (IOException e) {
+                throw e;
+            }
         }
     }
 
@@ -894,13 +982,21 @@ public class ApplicationServiceImpl extends ServiceImpl<ApplicationMapper, Appli
             FlinkSql flinkSql = flinkSqlService.getEffective(application.getId(), true);
             flinkSql.setToApplication(application);
         } else {
-            String path = this.projectService.getAppConfPath(application.getProjectId(), application.getModule());
-            application.setConfPath(path);
+            if (application.isCICDJob()) {
+                String path = this.projectService.getAppConfPath(application.getProjectId(), application.getModule());
+                application.setConfPath(path);
+            }
         }
         // add flink web url info for k8s-mode
         if (isKubernetesApp(application)) {
             String restUrl = k8sFlinkTrkMonitor.getRemoteRestUrl(toTrkId(application));
             application.setFlinkRestUrl(restUrl);
+
+            // set duration
+            long now = System.currentTimeMillis();
+            if (application.getTracking() == 1 && application.getStartTime() != null && application.getStartTime().getTime() > 0) {
+                application.setDuration(now - application.getStartTime().getTime());
+            }
         }
 
         return application;
@@ -908,10 +1004,15 @@ public class ApplicationServiceImpl extends ServiceImpl<ApplicationMapper, Appli
 
     @Override
     public String getMain(Application application) {
-        Project project = new Project();
-        project.setId(application.getProjectId());
-        String modulePath = project.getDistHome().getAbsolutePath().concat("/").concat(application.getModule());
-        File jarFile = new File(modulePath, application.getJar());
+        File jarFile;
+        if (application.getProjectId() == null) {
+            jarFile = new File(application.getJar());
+        } else {
+            Project project = new Project();
+            project.setId(application.getProjectId());
+            String modulePath = project.getDistHome().getAbsolutePath().concat("/").concat(application.getModule());
+            jarFile = new File(modulePath, application.getJar());
+        }
         Manifest manifest = Utils.getJarManifest(jarFile);
         return manifest.getMainAttributes().getValue("Main-Class");
     }
@@ -1013,7 +1114,6 @@ public class ApplicationServiceImpl extends ServiceImpl<ApplicationMapper, Appli
         this.baseMapper.updateTracking(appParam);
     }
 
-
     /**
      * 设置任务正在启动中.(for webUI "state" display)
      *
@@ -1048,7 +1148,8 @@ public class ApplicationServiceImpl extends ServiceImpl<ApplicationMapper, Appli
         }
 
         //1) 真正执行启动相关的操作..
-        String appConf, flinkUserJar;
+        String appConf;
+        String flinkUserJar;
         ApplicationLog applicationLog = new ApplicationLog();
         applicationLog.setAppId(application.getId());
         applicationLog.setStartTime(new Date());
@@ -1067,24 +1168,31 @@ public class ApplicationServiceImpl extends ServiceImpl<ApplicationMapper, Appli
             //获取一个最新的Effective的配置
             ApplicationConfig applicationConfig = configService.getEffective(application.getId());
             ExecutionMode executionMode = ExecutionMode.of(application.getExecutionMode());
-
             if (application.isCustomCodeJob()) {
                 assert executionMode != null;
-                switch (application.getApplicationType()) {
-                    case STREAMX_FLINK:
-                        String format = applicationConfig.getFormat() == 1 ? "yaml" : "prop";
-                        appConf = String.format("%s://%s", format, applicationConfig.getContent());
-                        flinkUserJar = String.format("%s/lib/%s", application.getAppHome(), application.getModule().concat(".jar"));
-                        break;
-                    case APACHE_FLINK:
-                        appConf = String.format("json://{\"%s\":\"%s\"}",
-                                ConfigurationOptions.KEY_APPLICATION_MAIN_CLASS,
-                                application.getMainClass()
-                        );
-                        flinkUserJar = String.format("%s/%s", application.getAppHome(), application.getJar());
-                        break;
-                    default:
-                        throw new IllegalArgumentException("[StreamX] ApplicationType must be (StreamX flink | Apache flink)... ");
+                if (application.isUploadJob()) {
+                    appConf = String.format("json://{\"%s\":\"%s\"}",
+                            ConfigConst.KEY_FLINK_APPLICATION_MAIN_CLASS(),
+                            application.getMainClass()
+                    );
+                    flinkUserJar = String.format("%s/%s", application.getAppHome(), application.getJar());
+                } else {
+                    switch (application.getApplicationType()) {
+                        case STREAMX_FLINK:
+                            String format = applicationConfig.getFormat() == 1 ? "yaml" : "prop";
+                            appConf = String.format("%s://%s", format, applicationConfig.getContent());
+                            flinkUserJar = String.format("%s/%s", application.getAppLib(), application.getModule().concat(".jar"));
+                            break;
+                        case APACHE_FLINK:
+                            appConf = String.format("json://{\"%s\":\"%s\"}",
+                                    ConfigConst.KEY_FLINK_APPLICATION_MAIN_CLASS(),
+                                    application.getMainClass()
+                            );
+                            flinkUserJar = String.format("%s/%s", application.getAppHome(), application.getJar());
+                            break;
+                        default:
+                            throw new IllegalArgumentException("[StreamX] ApplicationType must be (StreamX flink | Apache flink)... ");
+                    }
                 }
             } else if (application.isFlinkSqlJob()) {
                 FlinkSql flinkSql = flinkSqlService.getEffective(application.getId(), false);
@@ -1108,7 +1216,7 @@ public class ApplicationServiceImpl extends ServiceImpl<ApplicationMapper, Appli
                 assert executionMode != null;
                 //3) plugin
                 switch (executionMode) {
-                    case YARN_PRE_JOB:
+                    case YARN_PER_JOB:
                     case KUBERNETES_NATIVE_SESSION:
                     case KUBERNETES_NATIVE_APPLICATION:
                         flinkUserJar = Workspace.local().APP_PLUGINS().concat("/").concat(sqlDistJar);
@@ -1129,19 +1237,13 @@ public class ApplicationServiceImpl extends ServiceImpl<ApplicationMapper, Appli
                 option.append(" -n ");
             }
 
-            String[] dynamicOption = CommonUtils.notEmpty(application.getDynamicOptions())
-                    ? application.getDynamicOptions().split("\\s+")
-                    : new String[0];
+            String[] dynamicOption = CommonUtils.notEmpty(application.getDynamicOptions()) ? application.getDynamicOptions().split("\\s+") : new String[0];
 
             Map<String, Object> optionMap = application.getOptionMap();
             optionMap.put(ConfigConst.KEY_JOB_ID(), application.getId());
 
-            JarPackDeps jarPackDeps;
-            if (application.isCustomCodeJob()) {
-                jarPackDeps = Application.Dependency.jsonToDependency(application.getDependency()).toJarPackDeps();
-            } else {
+            if (application.isFlinkSqlJob()) {
                 FlinkSql flinkSql = flinkSqlService.getEffective(application.getId(), false);
-                jarPackDeps = Application.Dependency.jsonToDependency(flinkSql.getDependency()).toJarPackDeps();
                 optionMap.put(ConfigConst.KEY_FLINK_SQL(null), flinkSql.getSql());
             }
 
@@ -1149,21 +1251,15 @@ public class ApplicationServiceImpl extends ServiceImpl<ApplicationMapper, Appli
 
             KubernetesSubmitParam kubernetesSubmitParam = new KubernetesSubmitParam(
                     application.getClusterId(),
-                    application.getFlinkImage(),
                     application.getK8sNamespace(),
-                    jarPackDeps,
-                    new DockerAuthConf(
-                            settingService.getDockerRegisterAddress(),
-                            settingService.getDockerRegisterUser(),
-                            settingService.getDockerRegisterPassword()),
-                    application.getK8sPodTemplates(),
-                    application.getK8sRestExposedTypeEnum()
-            );
+                    application.getK8sRestExposedTypeEnum());
 
             FlinkEnv flinkEnv = flinkEnvService.getByIdOrDefault(application.getVersionId());
             if (flinkEnv == null) {
                 throw new IllegalArgumentException("[StreamX] can no found flink version");
             }
+
+            AppBuildPipeline buildPipeline = appBuildPipeService.getById(application.getId());
 
             SubmitRequest submitRequest = new SubmitRequest(
                     flinkEnv.getFlinkVersion(),
@@ -1181,6 +1277,7 @@ public class ApplicationServiceImpl extends ServiceImpl<ApplicationMapper, Appli
                     optionMap,
                     dynamicOption,
                     application.getArgs(),
+                    buildPipeline == null ? null : buildPipeline.getBuildResult(),
                     kubernetesSubmitParam
             );
 
@@ -1189,11 +1286,11 @@ public class ApplicationServiceImpl extends ServiceImpl<ApplicationMapper, Appli
             assert submitResponse != null;
 
             if (submitResponse.flinkConfig() != null) {
-                String jmMemory = submitResponse.flinkConfig().get(ConfigurationOptions.KEY_TOTAL_PROCESS_MEMORY);
+                String jmMemory = submitResponse.flinkConfig().get(ConfigConst.KEY_FLINK_TOTAL_PROCESS_MEMORY());
                 if (jmMemory != null) {
                     application.setJmMemory(FlinkMemorySize.parse(jmMemory).getMebiBytes());
                 }
-                String tmMemory = submitResponse.flinkConfig().get(ConfigurationOptions.KEY_TOTAL_PROCESS_MEMORY);
+                String tmMemory = submitResponse.flinkConfig().get(ConfigConst.KEY_FLINK_TOTAL_PROCESS_MEMORY());
                 if (tmMemory != null) {
                     application.setTmMemory(FlinkMemorySize.parse(tmMemory).getMebiBytes());
                 }
@@ -1246,7 +1343,7 @@ public class ApplicationServiceImpl extends ServiceImpl<ApplicationMapper, Appli
 
     private Boolean checkJobName(String jobName) {
         if (!StringUtils.isEmpty(jobName.trim())) {
-            return JOBNAME_PATTERN.matcher(jobName).matches();
+            return JOB_NAME_PATTERN.matcher(jobName).matches() && SINGLE_SPACE_PATTERN.matcher(jobName).matches();
         }
         return false;
     }

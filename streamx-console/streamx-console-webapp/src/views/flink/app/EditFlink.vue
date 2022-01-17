@@ -7,31 +7,26 @@
       @submit="handleSubmit"
       :form="form"
       v-if="app!=null">
-      <a-form-item
-        label="Project"
-        :label-col="{lg: {span: 5}, sm: {span: 7}}"
-        :wrapper-col="{lg: {span: 16}, sm: {span: 17} }">
-        <a-alert
-          :message="app['projectName']"
-          type="info" />
-      </a-form-item>
 
       <a-form-item
-        label="Module"
+        label="Development Mode"
         :label-col="{lg: {span: 5}, sm: {span: 7}}"
         :wrapper-col="{lg: {span: 16}, sm: {span: 17} }">
-        <a-alert
-          :message="app['module']"
-          type="info" />
-      </a-form-item>
 
-      <a-form-item
-        label="Application Type"
-        :label-col="{lg: {span: 5}, sm: {span: 7}}"
-        :wrapper-col="{lg: {span: 16}, sm: {span: 17} }">
         <a-alert
-          message="Apache Flink"
-          type="info" />
+          v-if="app['jobType'] === 1"
+          type="info" >
+          <template slot="message">
+            <a-icon type="code" style="color: #108ee9"/>&nbsp;&nbsp;Custom Code
+          </template>
+        </a-alert>
+        <a-alert
+          v-else
+          type="info">
+          <template slot="message">
+            <svg-icon name="fql" style="color: #108ee9"/>&nbsp;&nbsp;Flink SQL
+          </template>
+        </a-alert>
       </a-form-item>
 
       <a-form-item
@@ -40,7 +35,8 @@
         :wrapper-col="{lg: {span: 16}, sm: {span: 17} }">
         <a-select
           placeholder="Execution Mode"
-          v-decorator="[ 'executionMode', {rules: [{ required: true, message: 'Execution Mode is required' }] }]">
+          v-decorator="[ 'executionMode' ]"
+          @change="handleChangeMode">
           <a-select-option
             v-for="(o,index) in executionModes"
             :key="`execution_mode_${index}`"
@@ -49,6 +45,33 @@
             {{ o.mode }}
           </a-select-option>
         </a-select>
+      </a-form-item>
+
+      <a-form-item
+        label="Application Type"
+        :label-col="{lg: {span: 5}, sm: {span: 7}}"
+        :wrapper-col="{lg: {span: 16}, sm: {span: 17} }">
+        <a-alert
+          type="info">
+          <template slot="message">
+            <svg-icon name="flink" style="color: #108ee9"/>&nbsp;&nbsp;Apache Flink
+          </template>
+        </a-alert>
+      </a-form-item>
+
+      <a-form-item
+        label="Resource From"
+        :label-col="{lg: {span: 5}, sm: {span: 7}}"
+        :wrapper-col="{lg: {span: 16}, sm: {span: 17} }">
+        <a-alert
+          type="info">
+          <template slot="message" v-if="this.resourceFrom === 1">
+            <svg-icon name="github" style="color: #108ee9"/>&nbsp;&nbsp;CICD (build from CSV)
+          </template>
+          <template slot="message" v-if="this.resourceFrom === 2">
+            <svg-icon name="upload" style="color: #108ee9"/>&nbsp;&nbsp;Upload (upload local job)
+          </template>
+        </a-alert>
       </a-form-item>
 
       <a-form-item
@@ -106,9 +129,7 @@
             v-decorator="[ 'flinkImage', {rules: [{ required: true, message: 'Flink Base Docker Image is required' }] }]">
           </a-input>
         </a-form-item>
-      </template>
 
-      <template v-if="(executionMode == null && app.executionMode === 6) || executionMode === 6">
         <a-form-item
           label="Rest-Service Exposed Type"
           :label-col="{lg: {span: 5}, sm: {span: 7}}"
@@ -126,22 +147,100 @@
         </a-form-item>
       </template>
 
-      <a-form-item
-        label="Program Jar"
-        :label-col="{lg: {span: 5}, sm: {span: 7}}"
-        :wrapper-col="{lg: {span: 16}, sm: {span: 17} }">
-        <a-select
-          placeholder="Please select jar"
-          @change="handleChangeJars"
-          v-decorator="[ 'jar', {rules: [{ required: true }] }]">
-          <a-select-option
-            v-for="(jar,index) in jars"
-            :key="`jars_${index}`"
-            :value="jar">
-            {{ jar }}
-          </a-select-option>
-        </a-select>
-      </a-form-item>
+      <template v-if="resourceFrom == 1">
+        <a-form-item
+          label="Project"
+          :label-col="{lg: {span: 5}, sm: {span: 7}}"
+          :wrapper-col="{lg: {span: 16}, sm: {span: 17} }">
+          <a-alert
+            :message="app['projectName']"
+            type="info" />
+        </a-form-item>
+
+        <a-form-item
+          label="Module"
+          :label-col="{lg: {span: 5}, sm: {span: 7}}"
+          :wrapper-col="{lg: {span: 16}, sm: {span: 17} }">
+          <a-alert
+            :message="app['module']"
+            type="info" />
+        </a-form-item>
+
+        <a-form-item
+          label="Program Jar"
+          :label-col="{lg: {span: 5}, sm: {span: 7}}"
+          :wrapper-col="{lg: {span: 16}, sm: {span: 17} }">
+          <a-select
+            placeholder="Please select jar"
+            @change="handleChangeJars"
+            v-decorator="[ 'jar', {rules: [{ required: true }] }]">
+            <a-select-option
+              v-for="(jar,index) in jars"
+              :key="`jars_${index}`"
+              :value="jar">
+              {{ jar }}
+            </a-select-option>
+          </a-select>
+        </a-form-item>
+      </template>
+
+      <template v-else>
+        <a-form-item
+          label="Upload Job Jar"
+          :label-col="{lg: {span: 5}, sm: {span: 7}}"
+          :wrapper-col="{lg: {span: 16}, sm: {span: 17} }">
+          <a-upload-dragger
+            name="file"
+            :multiple="true"
+            @change="handleUploadJob"
+            :showUploadList="loading"
+            :customRequest="handleCustomJobRequest"
+            :beforeUpload="handleBeforeUpload">
+            <div style="height: 266px">
+              <p
+                class="ant-upload-drag-icon"
+                style="padding-top: 40px">
+                <a-icon
+                  type="inbox"
+                  :style="{ fontSize: '70px' }"/>
+              </p>
+              <p
+                class="ant-upload-text"
+                style="height: 45px">
+                Click or drag jar to this area to upload
+              </p>
+              <p
+                class="ant-upload-hint"
+                style="height: 45px">
+                Support for a single upload. You can upload a local jar here to support for current Job.
+              </p>
+            </div>
+          </a-upload-dragger>
+
+          <a-alert
+            v-show="uploadJar"
+            class="uploadjar-box"
+            type="info">
+            <template slot="message">
+              <span class="tag-dependency-pom">
+                {{ uploadJar }}
+              </span>
+            </template>
+          </a-alert>
+
+        </a-form-item>
+
+        <a-form-item
+          label="Program Jar"
+          :label-col="{lg: {span: 5}, sm: {span: 7}}"
+          :wrapper-col="{lg: {span: 16}, sm: {span: 17} }">
+          <a-input
+            type="text"
+            disabled
+            v-decorator="[ 'jar', {rules: [{ required: true}]} ]" />
+        </a-form-item>
+
+      </template>
 
       <a-form-item
         label="Program Main"
@@ -468,6 +567,13 @@
           name="dynamicOptions"
           placeholder="$key=$value,If there are multiple parameters,you can new line enter them (-D <arg>)"
           v-decorator="['dynamicOptions']" />
+        <p class="conf-desc">
+          <span class="note-info">
+            <a-tag color="#2db7f5" class="tag-note">Note</a-tag>
+            It works the same as <span class="note-elem">-D$property=$value</span> in CLI mode, e.g: <span class="note-elem">yarn.application.queue=flink</span>, Allows specifying multiple generic configuration options. The available options can be found
+            <a href="https://ci.apache.org/projects/flink/flink-docs-stable/ops/config.html" target="_blank">here</a>
+          </span>
+        </p>
       </a-form-item>
 
       <a-form-item
@@ -541,14 +647,16 @@
 
 <script>
 import { jars } from '@api/project'
-import { get, update, exists, main } from '@api/application'
+import {get, update, checkName, main, upload} from '@api/application'
 import { mapActions, mapGetters } from 'vuex'
 import configOptions from './Option'
 import {list as listFlinkEnv} from '@/api/flinkenv'
 import {initPodTemplateEditor} from './AddEdit'
+import SvgIcon from '@/components/SvgIcon'
 
 export default {
   name: 'EditFlink',
+  components: { SvgIcon },
   data() {
     return {
       strategy: 1,
@@ -559,7 +667,10 @@ export default {
       jmMaxTagCount: 1,
       tmMaxTagCount: 1,
       defaultOptions: {},
+      resourceFrom: null,
       defaultJar: null,
+      uploadJar: null,
+      executionMode: null,
       configSource: [],
       jars: [],
       flinkEnvs: [],
@@ -667,16 +778,21 @@ export default {
       get({ id: appId }).then((resp) => {
         this.app = resp.data
         this.versionId = this.app.versionId
-        this.defaultOptions = JSON.parse(this.app.options)
-        jars({
-          id: this.app.projectId,
-          module: this.app.module
-        }).then((resp) => {
-          this.jars = resp.data
+        this.defaultOptions = JSON.parse(this.app.options || '{}')
+        this.resourceFrom = this.app.resourceFrom
+        if (this.resourceFrom == 1) {
+          jars({
+            id: this.app.projectId,
+            module: this.app.module
+          }).then((resp) => {
+            this.jars = resp.data
+            this.handleReset()
+          }).catch((error) => {
+            this.$message.error(error.message)
+          })
+        } else {
           this.handleReset()
-        }).catch((error) => {
-          this.$message.error(error.message)
-        })
+        }
       }).catch((error) => {
         this.$message.error(error.message)
       })
@@ -694,6 +810,10 @@ export default {
       this.tmMemoryItems = item
     },
 
+    handleChangeMode(mode) {
+      this.executionMode = mode
+    },
+
     handleChangeProcess(item) {
       this.totalItems = item
     },
@@ -706,7 +826,7 @@ export default {
       if (!value) {
         callback(new Error('application name is required'))
       } else {
-        exists({
+        checkName({
           id: this.app.id,
           jobName: value
         }).then((resp) => {
@@ -720,7 +840,7 @@ export default {
           } else if (exists === 3){
             callback(new Error('The application name is already running in k8s,cannot be repeated. Please check'))
           }else{
-            callback(new Error('The application name is invalid.Please input Chinese,English letters,characters like [ _ ],[ - ],[ — ],[ . ]  and so on.Please check'))
+            callback(new Error('The application name is invalid.characters must be (Chinese|English|"-"|"_"),two consecutive spaces cannot appear.Please check'))
           }
         })
       }
@@ -775,6 +895,69 @@ export default {
       }
     },
 
+    handleBeforeUpload(file) {
+      if (file.type !== 'application/java-archive') {
+        if (!/\.(jar|JAR)$/.test(file.name)) {
+          this.loading = false
+          this.$message.error('Only jar files can be uploaded! please check your file.')
+          return false
+        }
+      }
+      this.loading = true
+      return true
+    },
+
+    handleUploadJob(info) {
+      const status = info.file.status
+      if (status === 'done') {
+        this.loading = false
+      } else if (status === 'error') {
+        this.loading = false
+        this.$message.error(`${info.file.name} file upload failed.`)
+      }
+    },
+
+    handleCustomJobRequest(data) {
+      const formData = new FormData()
+      formData.append('file', data.file)
+      upload(formData).then((resp) => {
+        if (resp.status == 'error') {
+          this.$swal.fire({
+            title: 'Failed',
+            icon: 'error',
+            width: this.exceptionPropWidth(),
+            html: '<pre class="propException">' + resp['exception'] + '</pre>',
+            focusConfirm: false
+          })
+        } else {
+          this.loading = false
+          const path = resp.data
+          this.uploadJar = data.file.name
+          this.form.setFieldsValue({ 'jar': this.uploadJar })
+          main({
+            jar: path
+          }).then((resp) => {
+            this.form.setFieldsValue({'mainClass': resp.data})
+          }).catch((error) => {
+            this.$message.error(error.message)
+          })
+        }
+      }).catch((error) => {
+        this.$message.error(error.message)
+        this.loading = false
+      })
+    },
+
+    handleUploadJar(info) {
+      const status = info.file.status
+      if (status === 'done') {
+        this.loading = false
+      } else if (status === 'error') {
+        this.loading = false
+        this.$message.error(`${info.file.name} file upload failed.`)
+      }
+    },
+
     handleK8sPodTemplateEditor(){
       this.$nextTick(() => {
         initPodTemplateEditor(this)
@@ -822,7 +1005,8 @@ export default {
               k8sRestExposedType: values.k8sRestExposedType,
               k8sNamespace: values.k8sNamespace || null,
               clusterId: values.clusterId || null,
-              flinkImage: values.flinkImage || null
+              flinkImage: values.flinkImage || null,
+              resourceFrom: this.resourceFrom
             }
 
             if (params.executionMode === 6) {
@@ -904,12 +1088,11 @@ export default {
           'flinkImage': this.app.flinkImage,
           'k8sNamespace': this.app.k8sNamespace
         })
-
         if (this.app.executionMode === 6) {
           this.podTemplate = this.app.k8sPodTemplate
           this.jmPodTemplate = this.app.k8sJmPodTemplate
           this.tmPodTemplate = this.app.k8sTmPodTemplate
-          this.initPodTemplateEditor(this)
+          initPodTemplateEditor(this)
         }
       })
       let parallelism = null
